@@ -1,0 +1,76 @@
+{
+  "domJSON-LICENSE.md": {
+    "url": "https://raw.githubusercontent.com/azaslavsky/domJSON/master/LICENSE.md",
+    "sha256": "bb23d3c05427c6dcec0a085c8943a50bd3ba2e1ec589faf4cf5ec57f1b9b08d2"
+  },
+  "PyObjC-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/ronaldoussoren/pyobjc/v12.1/pyobjc-core/License.txt",
+    "sha256": "0ca04b07928d4872b9d9bb22187ca0426dd8bfab08f26eada0999a71dc81aaff"
+  },
+  "JetBrains-Mono-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/OFL.txt",
+    "sha256": "a76abf002c49097d146e86740a3105a5d00450b1592e820a1109a8c5680cd697"
+  },
+  "Familjen-Grotesk-OFL.txt": {
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/familjengrotesk/OFL.txt",
+    "sha256": "9708dd560d1f8aa1f006461aa447a31fda7b9aff662d152837654a388e0eb2ee"
+  },
+  "proxy-tools-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/jtushman/proxy_tools/master/LICENSE.txt",
+    "sha256": "a428fb8a2e762af3eb0a6edbbb88e9b42ccfee80fd9b423958bcacf9b9abbfe4"
+  },
+  "Python-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.8/LICENSE",
+    "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231"
+  },
+  "zlib-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+    "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+  },
+  "libffi-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/libffi/libffi/v3.4.4/LICENSE",
+    "sha256": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388"
+  },
+  "xz-COPYING.txt": {
+    "url": "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING",
+    "sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c"
+  },
+  "OpenSSL-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.9/LICENSE.txt",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  "zlib-ng-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/zlib-ng/zlib-ng/2.2.4/LICENSE.md",
+    "sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee"
+  },
+  "zstd-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.7/LICENSE",
+    "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+  },
+  "HACL-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.8/Modules/_hacl/Hacl_Hash_SHA2.c",
+    "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c"
+  },
+  "expat-COPYING.txt": {
+    "url": "https://raw.githubusercontent.com/libexpat/libexpat/R_2_8_5/expat/COPYING",
+    "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
+  },
+  "mpdecimal-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.8/Modules/_decimal/libmpdec/mpdecimal.c",
+    "sha256": "b07528d8b1dbf1e2d2741052996f0876e23342ce2d30d0effa39c5457716c25a"
+  },
+  "Inno-Setup-LICENSE.txt": {
+    "url": "https://jrsoftware.org/files/is/license.txt",
+    "sha256": "2e5346868c2a18434489824e11d65c3031620f792fefc415d05f19cd441abf5c"
+  },
+  "WebView2-LICENSE.txt": {
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3856.49/microsoft.web.webview2.1.0.3856.49.nupkg",
+    "member": "LICENSE.txt",
+    "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+  },
+  "WebView2-NOTICE.txt": {
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3856.49/microsoft.web.webview2.1.0.3856.49.nupkg",
+    "member": "NOTICE.txt",
+    "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90"
+  }
+}

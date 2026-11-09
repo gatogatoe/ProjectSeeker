@@ -1,0 +1,48 @@
+# Builds Project Seeker for Mac on GitHub's Mac servers (no Mac needed): reader test -> app -> .dmg -> SHA-256.
+# Two .dmg: one for Apple Silicon Macs (M1, M2...) and one for Intel Macs.
+# At every push (or from Actions > Build Mac > Run workflow) the .dmg files are in the run's "Artifacts".
+name: Build Mac
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore: ['**.md']   # notes only: no build (Mac minutes count 10x in a private repository)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest       # Apple Silicon (arm64)
+          - runner: macos-15-intel     # Intel (x86_64)
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Version from app.py
+        run: |
+          v=$(sed -n "s/^VERSION = '\(.*\)'/\1/p" app.py)
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "${{ github.ref_name }}" != "v$v" ]; then
+            echo "The tag ${{ github.ref_name }} does not match VERSION = '$v' in app.py"; exit 1
+          fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Build app and .dmg
+        run: PYTHON=python bash build_mac.sh
+
+      - name: Keep the .dmg
+        uses: actions/upload-artifact@v6
+        with:
+          name: ProjectSeeker-${{ env.VERSION }}-mac-${{ runner.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.dmg.sha256.txt

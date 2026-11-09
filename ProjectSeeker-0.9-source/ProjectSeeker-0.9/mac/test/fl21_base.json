@@ -1,0 +1,40 @@
+{
+ "clean": true,
+ "version": "21.2.3.4004",
+ "bpm": 140.0,
+ "created": "2023-03-15",
+ "hours": 1.5,
+ "samples": [
+  "C:\\Samples\\kick.wav",
+  "%FLStudioUserData%\\Projects\\beat\\vocals.wav"
+ ],
+ "native": [
+  "Sytrus"
+ ],
+ "vst": [
+  "Serum"
+ ],
+ "plugsamples": [],
+ "channels": [
+  {
+   "n": 0,
+   "f": 0
+  },
+  {
+   "n": 0,
+   "f": 1
+  }
+ ],
+ "vstpaths": {},
+ "gen": [],
+ "fx": [
+  "Sytrus",
+  "Serum"
+ ],
+ "patterns": 0,
+ "nchannels": 2,
+ "title": "",
+ "artist": "",
+ "key": "",
+ "warn": []
+}

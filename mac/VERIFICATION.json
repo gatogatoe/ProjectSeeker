@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-09",
+  "run_url": "https://github.com/gatogatoe/ProjectSeeker-Mac/actions/runs/42618591299",
+  "commit": "3e9dd1376a4488cd1d98c0a3ff85a82f8c22ff5b",
+  "packages": [
+    {
+      "filename": "ProjectSeeker-0.9-mac-arm64.dmg",
+      "bytes": 15904350,
+      "sha256": "5ca39a2e9c8b0d780f01e07701003bbd73095a87d1d53df3c6bd69b00c4962ff",
+      "python_tests": 44,
+      "reader_fixtures": 22,
+      "smoke": {
+        "ok": true,
+        "arch": "arm64",
+        "frozen": true,
+        "checks": 134,
+        "webview": "WKWebView",
+        "audio": "4 second synthetic WAV loaded",
+        "languages": [
+          "it",
+          "en",
+          "fr",
+          "de"
+        ]
+      }
+    },
+    {
+      "filename": "ProjectSeeker-0.9-mac-x86_64.dmg",
+      "bytes": 16326625,
+      "sha256": "43989b9a6ef183310cbb39d7169f5b5aaa8184faa51b1ae618b6a438513afea9",
+      "python_tests": 44,
+      "reader_fixtures": 22,
+      "smoke": {
+        "ok": true,
+        "arch": "x86_64",
+        "frozen": true,
+        "checks": 134,
+        "webview": "WKWebView",
+        "audio": "4 second synthetic WAV loaded",
+        "languages": [
+          "it",
+          "en",
+          "fr",
+          "de"
+        ]
+      }
+    }
+  ],
+  "windows_sources_match_snapshot": true
+}

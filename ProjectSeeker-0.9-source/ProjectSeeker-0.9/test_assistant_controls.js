@@ -1,0 +1,216 @@
+// Copyright (C) 2026 Gato
+// SPDX-License-Identifier: GPL-3.0-only
+// Licensed under the GNU General Public License v3.0; see LICENSE.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const html = fs.readFileSync('ui/index.html', 'utf8');
+for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new vm.Script(match[1]);
+const keys = ['Interrompi generazione', 'Modifica messaggio', 'Invia modifica', 'Generazione interrotta', 'Impossibile interrompere la generazione', 'Modalità assistente', 'Modalità attiva', 'Chat normale', 'Cerca tra i progetti', 'Crea', 'Periodo del Wrapped', 'Periodo non valido', 'Intervallo personalizzato', 'Crea Wrapped', 'Ore FL totali dei progetti selezionati', 'Tipo di Wrapped', 'Ascolti e progetti', 'Solo progetti', 'Solo ascolti nell’app', 'Il nome più lungo', '{n} caratteri', 'Più ascoltati · totale nell’app', 'Gli ascolti mostrati sono totali nell’app e non sono filtrati per il periodo dei progetti.'];
+for (const lang of ['en', 'de', 'fr']) {
+  const text = fs.readFileSync('ui/lang/' + lang + '.js', 'utf8');
+  new vm.Script(text);
+  for (const key of keys) assert.ok(text.includes(JSON.stringify(key)));
+}
+const extract = (from, to) => html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
+const handlers = {};
+const fields = {'#as-text': {value: '', style: {}, scrollHeight: 48, focus() {}}, '#as-edit-text': {value: '', focus() {}}, '[data-as-stop]': {disabled: false}};
+for (const id of ['year', 'start', 'end', 'field', 'kind']) fields['#as-wrapped-' + id] = {value: '', focus() {}};
+fields['#as-chat-mode'] = {value: '', focus() {}};
+fields['#as-chat-reasoning'] = {value: '', disabled: false};
+fields['[data-as-send]'] = {disabled: false};
+const calls = [];
+let pending = null;
+const api = {
+  assistant_chat_save: async (id, messages) => ({ok: true, chat: {id: id || 'a'.repeat(32), messages, title: 'Test'}}),
+  assistant_chat: async (...args) => { calls.push(args); return pending ? await pending : {ok: true, answer: 'New answer'}; },
+  assistant_status: async id => ({id, text: 'Partial', stage: 'answer'}),
+  assistant_stop: async id => { calls.push(['stop', id]); if (finish) finish({cancelled: true, answer: 'Partial'}); return {ok: true}; }
+};
+let finish;
+const context = vm.createContext({
+  console, setInterval, clearInterval, Date, Math, LANG: 'it',
+  document: {addEventListener: (type, handler) => { handlers[type] = handler; }},
+  $: selector => fields[selector] || null, api: () => api,
+  S: {tab: 'assistant', D: {P: []}}, T: text => text, fmtDate: text => text,
+  esc: text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
+  ICO: x => x, I_PAUSE: '<pause/>', I_COPY: '<copy/>', NAV_ICON: {assistant: ''},
+  assistantWrapped: () => '', assistantProjectCard: () => '', assistantLoading: () => '',
+  render: () => {}, alertBar: text => { throw Error(text); }
+});
+vm.runInContext(extract('const ASSIST =', '\nfunction assistantSection') + '\n' + extract('function assistantWrappedPicker()', '\nlet assistantComposerObserver') + '\n' + extract('function assistantSelectMode(mode)', "\ndocument.addEventListener('change'"), context);
+vm.runInContext(extract("document.addEventListener('change', async e => {", "\ndocument.addEventListener('input', e =>"), context);
+vm.runInContext(extract('function assistantWrapped(w)', '\nfunction assistantRestore'), context);
+const run = code => vm.runInContext(code, context);
+const click = async dataset => handlers.click({target: {closest: () => ({dataset})}, preventDefault() {}, stopImmediatePropagation() {}});
+const change = async (id, value) => { const target = fields['#' + id]; target.id = id; target.value = value; await handlers.change({target}); };
+const snapshot = () => JSON.parse(run('JSON.stringify(ASSIST)'));
+(async () => {
+  run("ASSIST.config={url:'http://localhost',model:'test',local:true}; ASSIST.history=[{role:'user',content:'<old>',project_context:'original'},{role:'assistant',content:'AI answer'},{role:'user',content:'Later'}]");
+  let markup = run('viewAssistant()');
+  assert.ok(markup.includes('data-as-edit="0"'));
+  assert.ok(markup.includes('data-as-edit="2"'));
+  assert.ok(!markup.includes('data-as-edit="1"'));
+  assert.ok(markup.includes('&lt;old&gt;'));
+  assert.ok(markup.includes('Chat normale'));
+  assert.ok(markup.includes('<option value="search">'));
+  assert.ok(markup.includes('<option value="inspiration">'));
+  assert.ok(markup.indexOf('assistant-compose-meta') < markup.indexOf('id="as-chat-mode"'));
+  assert.ok(markup.includes('id="as-chat-reasoning"'));
+  const config = snapshot().config;
+  let savedConfig;
+  api.assistant_save = async payload => { savedConfig = payload; return {ok:true, config:{...config, reasoning:payload.reasoning}}; };
+  fields['#as-text'].value = 'Preserved draft';
+  await change('as-chat-reasoning', 'high');
+  assert.equal(snapshot().config.reasoning, 'high');
+  assert.equal(savedConfig.url, config.url);
+  assert.ok(!Object.hasOwn(savedConfig, 'key'));
+  assert.ok(!Object.hasOwn(savedConfig, 'clear_key'));
+  assert.equal(fields['#as-text'].value, 'Preserved draft');
+  assert.ok(run('viewAssistant()').includes('<option value="high" selected>'));
+  api.assistant_save = async () => ({ok:false});
+  await assert.rejects(change('as-chat-reasoning', 'low'), /Impossibile salvare/);
+  assert.equal(snapshot().config.reasoning, 'high');
+  assert.equal(fields['#as-chat-reasoning'].value, 'high');
+  assert.equal(fields['#as-chat-reasoning'].disabled, false);
+  api.assistant_save = async () => { throw Error('offline'); };
+  await assert.rejects(change('as-chat-reasoning', 'none'), /Impossibile salvare/);
+  assert.equal(snapshot().savingReasoning, false);
+  let completeSave;
+  api.assistant_save = payload => new Promise(resolve => { completeSave = () => resolve({ok:true,config:{...config,reasoning:payload.reasoning}}); });
+  const savingReasoning = change('as-chat-reasoning', 'none');
+  const requestsBeforeSave = calls.length;
+  await run('assistantSend()');
+  assert.equal(calls.length, requestsBeforeSave);
+  assert.equal(fields['[data-as-send]'].disabled, true);
+  completeSave(); await savingReasoning;
+  assert.equal(snapshot().config.reasoning, 'none');
+  assert.equal(fields['[data-as-send]'].disabled, false);
+  run('ASSIST.busy=true');
+  markup = run('viewAssistant()');
+  assert.match(markup, /data-as-stop="1"[^>]*>/);
+  assert.ok(!markup.match(/data-as-stop="1"[^>]*disabled/));
+  assert.ok(!markup.includes('data-as-send'));
+  run('ASSIST.busy=false');
+  await click({asEdit: '1'});
+  assert.equal(snapshot().editing, null);
+  await click({asEdit: '0'});
+  assert.equal(snapshot().editing, 0);
+  markup = run('viewAssistant()');
+  assert.ok(markup.includes('id="as-edit-text"'));
+  assert.ok(markup.includes('Invia modifica'));
+  await click({asEditCancel: '1'});
+  assert.equal(snapshot().history.length, 3);
+  assert.equal(snapshot().history[0].content, '<old>');
+  await click({asEdit: '0'});
+  fields['#as-edit-text'].value = 'Corrected';
+  await click({asEditSend: '1'});
+  assert.equal(snapshot().history.length, 2);
+  assert.equal(snapshot().history[0].content, 'Corrected');
+  assert.equal(snapshot().history[1].content, 'New answer');
+  assert.equal(calls[0][0], 'Corrected');
+  assert.equal(calls[0][1].length, 0);
+  assert.equal(calls[0][2], 'original');
+  assert.equal(calls[0][4], '');
+  fields['#as-text'].value = 'Next';
+  pending = new Promise(resolve => { finish = resolve; });
+  const sending = run('assistantSend()');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(snapshot().busy, true);
+  await run('assistantStop()');
+  await sending;
+  assert.equal(snapshot().busy, false);
+  assert.equal(snapshot().history.at(-1).cancelled, true);
+  fields['#as-text'].value = 'Draft';
+  await change('as-chat-mode', 'search');
+  assert.equal(snapshot().mode, 'search');
+  assert.equal(fields['#as-text'].value, 'Draft');
+  assert.ok(run('viewAssistant()').includes('<option value="search" selected>'));
+  await run('assistantSend()');
+  assert.equal(calls.at(-1)[4], 'search');
+  assert.equal(snapshot().history.at(-2).mode, 'search');
+  await change('as-chat-mode', '');
+  assert.equal(snapshot().mode, '');
+  fields['#as-text'].value = 'ciao';
+  await run('assistantSend()');
+  assert.equal(calls.at(-1)[4], '');
+  await change('as-chat-mode', 'inspiration');
+  fields['#as-text'].value = 'Title ideas';
+  await run('assistantSend()');
+  assert.equal(calls.at(-1)[4], 'inspiration');
+  run("ASSIST.history=[{role:'user',content:'Search',mode:'search'},{role:'assistant',content:'Old response'}]; ASSIST.editing=0; ASSIST.mode='inspiration'");
+  fields['#as-edit-text'].value = 'Corrected search';
+  await run('assistantSend(ASSIST.mode, true)');
+  assert.equal(calls.at(-1)[4], 'search');
+  assert.equal(snapshot().mode, 'search');
+  assert.equal(snapshot().history.at(-1).content, 'Partial');
+  assert.equal(snapshot().history.at(-1).error, false);
+  assert.ok(run('viewAssistant()').includes('Generazione interrotta'));
+  pending = null; finish = null;
+  let saved;
+  const persist = api.assistant_chat_save;
+  api.assistant_chat_save = async (...args) => { api.assistant_chat_save = persist; await new Promise(resolve => { saved = resolve; }); return persist(...args); };
+  const before = calls.filter(x => x[0] !== 'stop').length;
+  fields['#as-text'].value = 'Stop before request';
+  const early = run('assistantSend()');
+  await run('assistantStop()');
+  saved(); await early;
+  assert.equal(calls.filter(x => x[0] !== 'stop').length, before);
+  assert.equal(snapshot().busy, false);
+  assert.equal(snapshot().history.at(-1).cancelled, true);
+  const annualCard = run("assistantWrapped({projects:1,fl_reported_hours:20,period:{start:'2024-01-01',end:'2024-12-31',field:'created'},top_played:[{name:'Lifetime play',plays:50}],top_hours:[]})");
+  assert.ok(annualCard.includes('Ore FL totali dei progetti selezionati'));
+  assert.ok(!annualCard.includes('Ascolti nell’app'));
+  assert.ok(!annualCard.includes('Lifetime play'));
+  const combined = run("assistantWrapped({kind:'both',projects:1,fl_reported_hours:20,period:{start:'2024-01-01',end:'2024-12-31',field:'modified'},listening:{in_app_plays:4,projects:1,top_played:[{name:'Played',plays:4}]},name_highlights:{longest:{name:'<long>',characters:6}}})");
+  assert.ok(combined.includes('totali nell’app e non sono filtrati'));
+  assert.ok(combined.includes('&lt;long&gt;'));
+  assert.ok(!combined.includes('<long>'));
+  const listeningCard = run("assistantWrapped({kind:'listening',projects:1,listening:{in_app_plays:4,projects:1,top_played:[]},top_hours:[]})");
+  assert.ok(!listeningCard.includes('Ore riportate da FL'));
+  assert.ok(listeningCard.includes('Ascolti totali nell’app'));
+  const beforeWrapped = calls.length;
+  run('ASSIST.config.local=false; ASSIST.config.share=false');
+  await assert.rejects(click({asSuggest: '1'}), /abilita la condivisione/);
+  assert.equal(calls.length, beforeWrapped);
+  run('ASSIST.config.local=true');
+  await change('as-chat-mode', 'wrapped');
+  assert.equal(calls.length, beforeWrapped);
+  assert.equal(snapshot().wrappedPicker, true);
+  markup = run('viewAssistant()');
+  assert.ok(markup.includes('id="as-wrapped-year"'));
+  assert.ok(markup.includes('type="date"'));
+  await click({asWrappedCancel: '1'});
+  assert.equal(snapshot().wrappedPicker, false);
+  assert.equal(calls.length, beforeWrapped);
+  await click({asSuggest: '1'});
+  fields['#as-wrapped-kind'].value = 'projects';
+  fields['#as-wrapped-year'].value = '2024';
+  fields['#as-wrapped-start'].value = '2024-01-01';
+  fields['#as-wrapped-end'].value = '2024-12-31';
+  fields['#as-wrapped-field'].value = 'created';
+  await click({asWrappedSend: '1'});
+  assert.equal(calls.at(-1)[4], 'wrapped');
+  assert.equal(calls.at(-1)[6], 'it');
+  assert.equal(calls.at(-1)[7], 'projects');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1)[5])), {start:'2024-01-01', end:'2024-12-31', field:'created'});
+  assert.equal(snapshot().wrappedPicker, false);
+  run('ASSIST.editing=ASSIST.history.length-2');
+  fields['#as-edit-text'].value = 'Annual recap';
+  await run('assistantSend(ASSIST.mode, true)');
+  assert.equal(calls.at(-1)[5].start, '2024-01-01');
+  fields['#as-wrapped-year'].value = 'all';
+  await click({asWrappedSend: '1'});
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1)[5])), {});
+  context.LANG = 'en';
+  fields['#as-text'].value = 'hi';
+  await run('assistantSend()');
+  assert.equal(calls.at(-1)[6], 'en');
+  fields['#as-wrapped-kind'].value = 'listening';
+  fields['#as-wrapped-year'].value = '2024';
+  await click({asWrappedSend: '1'});
+  assert.equal(calls.at(-1)[7], 'listening');
+  assert.equal(calls.at(-1)[6], 'en');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1)[5])), {});
+  console.log('Assistant controls: mode menu, reasoning save/failure/send guard, draft retention, edit, resend, stop, escaping, translations and JavaScript syntax passed.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

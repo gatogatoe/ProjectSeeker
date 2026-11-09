@@ -1,0 +1,48 @@
+{
+ "clean": true,
+ "version": "26.1.7.5654",
+ "bpm": 140.0,
+ "created": "2023-03-15",
+ "hours": 1.5,
+ "samples": [
+  "Samples\\relative kick.wav"
+ ],
+ "native": [
+  "FLEX",
+  "Fruity Limiter"
+ ],
+ "vst": [
+  "Serum",
+  "Pro-Q"
+ ],
+ "plugsamples": [],
+ "channels": [
+  {
+   "n": 0,
+   "pl": "FLEX"
+  },
+  {
+   "n": 1,
+   "pl": "Serum"
+  },
+  {
+   "n": 2,
+   "f": 0
+  }
+ ],
+ "vstpaths": {},
+ "gen": [
+  "FLEX",
+  "Serum"
+ ],
+ "fx": [
+  "Fruity Limiter",
+  "Pro-Q"
+ ],
+ "patterns": 3,
+ "nchannels": 3,
+ "title": "Night Drive",
+ "artist": "Someone",
+ "key": "D# Minor",
+ "warn": []
+}

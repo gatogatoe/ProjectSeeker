@@ -1,0 +1,39 @@
+# Copyright (C) 2026 Gato
+# SPDX-License-Identifier: GPL-3.0-only
+# Licensed under the GNU General Public License v3.0; see LICENSE.
+name: Build Windows distribution
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+      - name: Build and verify GPL package
+        run: python build_release.py
+      - name: Prepare allowlisted Windows distribution and matching source
+        run: python prepare_public.py --stage --windows-only
+      - name: Keep private distribution artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ProjectSeeker-Windows-distribution
+          path: build/public-preview/
+          if-no-files-found: error

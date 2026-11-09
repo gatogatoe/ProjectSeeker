@@ -1,0 +1,21 @@
+{
+  "filename": "ProjectSeeker-0.9-mac-arm64.dmg",
+  "bytes": 15904350,
+  "sha256": "5ca39a2e9c8b0d780f01e07701003bbd73095a87d1d53df3c6bd69b00c4962ff",
+  "python_tests": 44,
+  "reader_fixtures": 22,
+  "smoke": {
+    "ok": true,
+    "arch": "arm64",
+    "frozen": true,
+    "checks": 134,
+    "webview": "WKWebView",
+    "audio": "4 second synthetic WAV loaded",
+    "languages": [
+      "it",
+      "en",
+      "fr",
+      "de"
+    ]
+  }
+}

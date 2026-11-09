@@ -1,0 +1,28 @@
+{
+ "clean": true,
+ "version": "25.2.4.4960",
+ "bpm": 150.0,
+ "created": "",
+ "hours": null,
+ "samples": [
+  "C:\\Samples\\snare.wav"
+ ],
+ "native": [],
+ "vst": [],
+ "plugsamples": [],
+ "channels": [
+  {
+   "n": 0,
+   "f": 0
+  }
+ ],
+ "vstpaths": {},
+ "gen": [],
+ "fx": [],
+ "patterns": 0,
+ "nchannels": 1,
+ "title": "",
+ "artist": "",
+ "key": "",
+ "warn": []
+}

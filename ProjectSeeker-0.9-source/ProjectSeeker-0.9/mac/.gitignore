@@ -1,0 +1,10 @@
+# Built by build_mac.sh / PyInstaller
+build/
+dist/
+.venv/
+build_mac_log.txt
+__pycache__/
+*.pyc
+.DS_Store
+ui/.test-*.html
+test/fl26_1_template_image_line.*

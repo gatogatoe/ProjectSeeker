@@ -1,0 +1,156 @@
+{
+ "clean": true,
+ "version": "26.1.0.1",
+ "bpm": null,
+ "created": "",
+ "hours": null,
+ "samples": [
+  "C:\\Kits\\kick 01.wav",
+  "C:\\Kits\\snare 03.wav",
+  "C:\\Kits\\vox take.wav"
+ ],
+ "native": [
+  "FLEX",
+  "FL Keys",
+  "3x Osc"
+ ],
+ "vst": [
+  "Nexus",
+  "Nexus",
+  "Serum",
+  "Serum",
+  "Serum",
+  "Vital",
+  "Addictive Keys",
+  "Arcade",
+  "Pro-Q"
+ ],
+ "plugsamples": [],
+ "channels": [
+  {
+   "n": 1,
+   "t": 0,
+   "f": 0
+  },
+  {
+   "n": 2,
+   "t": 0,
+   "nm": "My Snare",
+   "f": 1
+  },
+  {
+   "n": 3,
+   "t": 4,
+   "f": 2
+  },
+  {
+   "n": 5,
+   "t": 2,
+   "pl": "Nexus"
+  },
+  {
+   "n": 6,
+   "t": 2,
+   "nm": "Lead Night",
+   "pl": "Nexus"
+  },
+  {
+   "n": 7,
+   "t": 2,
+   "pl": "Serum",
+   "ps": "Night Lead",
+   "au": "Someone",
+   "sr": {
+    "a": "Analog\\Basic Shapes.wav",
+    "b": "Digital\\Saw.wav",
+    "n": "Organics\\AC hum1.wav",
+    "e": 1
+   }
+  },
+  {
+   "n": 8,
+   "t": 2,
+   "nm": "Serum #2",
+   "pl": "Serum",
+   "ps": "- Init -",
+   "sr": {
+    "n": "Custom Noise"
+   }
+  },
+  {
+   "n": 9,
+   "t": 2,
+   "nm": "Serum #3",
+   "pl": "Serum"
+  },
+  {
+   "n": 10,
+   "t": 2,
+   "pl": "Vital",
+   "ps": "Deep \"Bass\"",
+   "au": "Someone"
+  },
+  {
+   "n": 11,
+   "t": 2,
+   "pl": "Addictive Keys",
+   "ps": "St Grand Producer"
+  },
+  {
+   "n": 12,
+   "t": 2,
+   "pl": "Arcade",
+   "ps": "Rain & Snow, Still"
+  },
+  {
+   "n": 13,
+   "t": 2,
+   "nm": "Bell Pad",
+   "pl": "FLEX",
+   "pk": "Essential Winds",
+   "ps": "Bell Pad"
+  },
+  {
+   "n": 14,
+   "t": 2,
+   "pl": "FL Keys",
+   "ps": "Grand Piano"
+  },
+  {
+   "n": 15,
+   "t": 2,
+   "nm": "Sub",
+   "pl": "3x Osc"
+  }
+ ],
+ "vstpaths": {
+  "Nexus": "C:\\VST3\\Nexus.vst3",
+  "Serum": "C:\\VST\\Serum_x64.dll",
+  "Vital": "C:\\VST3\\Vital.vst3",
+  "Addictive Keys": "C:\\VST\\AK.dll",
+  "Arcade": "C:\\VST\\Arcade.dll",
+  "Pro-Q": "C:\\VST3\\ProQ.vst3"
+ },
+ "gen": [
+  "Nexus",
+  "Nexus",
+  "Serum",
+  "Serum",
+  "Serum",
+  "Vital",
+  "Addictive Keys",
+  "Arcade",
+  "FLEX",
+  "FL Keys",
+  "3x Osc"
+ ],
+ "fx": [
+  "Pro-Q"
+ ],
+ "patterns": 0,
+ "nchannels": 16,
+ "title": "",
+ "artist": "",
+ "key": "",
+ "warn": []
+}

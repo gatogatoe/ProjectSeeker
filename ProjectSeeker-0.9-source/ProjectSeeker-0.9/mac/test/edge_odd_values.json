@@ -1,0 +1,31 @@
+{
+ "clean": true,
+ "version": "24.1.0.1",
+ "bpm": null,
+ "created": "",
+ "hours": null,
+ "samples": [
+  "C:\\Samples\\odd.wav"
+ ],
+ "native": [],
+ "vst": [],
+ "plugsamples": [],
+ "channels": [
+  {
+   "n": 0,
+   "f": 0
+  }
+ ],
+ "vstpaths": {},
+ "gen": [],
+ "fx": [],
+ "patterns": 0,
+ "nchannels": 1,
+ "title": "Still Here",
+ "artist": "",
+ "key": "",
+ "warn": [
+  "bpm",
+  "created"
+ ]
+}

@@ -1,0 +1,28 @@
+{
+ "clean": true,
+ "version": "26.1.0.1",
+ "bpm": 140.0,
+ "created": "2023-03-15",
+ "hours": 1.5,
+ "samples": [
+  "C:\\Samples\\snare.wav"
+ ],
+ "native": [],
+ "vst": [],
+ "plugsamples": [],
+ "channels": [
+  {
+   "n": 0,
+   "f": 0
+  }
+ ],
+ "vstpaths": {},
+ "gen": [],
+ "fx": [],
+ "patterns": 0,
+ "nchannels": 1,
+ "title": "",
+ "artist": "",
+ "key": "",
+ "warn": []
+}

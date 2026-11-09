@@ -1,0 +1,709 @@
+--- a/app.py
++++ b/app.py
+@@ -26,6 +26,10 @@
+ import assistant_local
+ import assistant_library
+ 
++MAC = sys.platform == 'darwin'
++if MAC:
++    import mac_support
++
+ APP = 'ProjectSeeker'
+ VERSION = '0.9'
+ PARSER = 7
+@@ -42,13 +46,15 @@
+ BACKUP_RE = re.compile(r'^(.*) \((?:overwritten|autosaved) (?:on [^)]* )?at [^)]*\)(?:_\d+)?$', re.I)
+ VAR_RE = re.compile(r'^%([A-Za-z]+)%[\\/]*(.*)$')
+ # system folders at the root of a drive: the Recycle Bin holds deleted projects and samples ($R1A2B3C.flp), not the library
+-SKIP_DIRS = {'$recycle.bin', 'recycler', 'system volume information'}
++SKIP_DIRS = {'$recycle.bin', 'recycler', 'system volume information', '.trashes', '.trash', '.spotlight-v100', '.fseventsd', '.documentrevisions-v100', '.temporaryitems'}
+ 
+ 
+ SYS_LANGS = {0x10: 'it', 0x0C: 'fr', 0x07: 'de'}  # Windows primary language ids of the app's languages (others: English)
+ 
+ 
+ def sys_lang():
++    if MAC:
++        return mac_support.sys_lang()
+     try:
+         import ctypes
+         return SYS_LANGS.get(ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF, 'en')
+@@ -775,7 +781,8 @@
+ 
+ # ------------------------------------------------------------------ sample paths
+ def _fl_installs():
+-    """FL Studio install folders (Program Files\\Image-Line\\FL Studio*), newest first."""
++    if MAC:
++        return mac_support.fl_installs()
+     found = []
+     for base in {os.environ.get('ProgramFiles', r'C:\Program Files'), os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')}:
+         found += [d for d in glob.glob(os.path.join(base, 'Image-Line', 'FL Studio*')) if os.path.isdir(d)]
+@@ -783,7 +790,8 @@
+ 
+ 
+ def _documents():
+-    """The Documents folder, also when Windows keeps it somewhere else (OneDrive, another drive)."""
++    if MAC:
++        return os.path.join(os.path.expanduser('~'), 'Documents')
+     try:
+         import ctypes
+         buf = ctypes.create_unicode_buffer(1024)
+@@ -844,8 +852,8 @@
+ 
+ 
+ def fl_search_dirs():
+-    """Browser extra search folders of the newest FL Studio (each version keeps its own list), read from the registry,
+-    only those that exist. When FL loads a project it looks there, subfolders included, for a missing sample by its name."""
++    if MAC:
++        return mac_support.search_dirs()
+     out, seen = [], set()
+     try:
+         import winreg
+@@ -913,7 +921,8 @@
+ 
+ 
+ def _fl_exe():
+-    """Installed FL Studio (the newest), if it is in the usual folders."""
++    if MAC:
++        return next(iter(mac_support.fl_apps()), None)
+     found = []
+     for base in {os.environ.get('ProgramFiles', r'C:\Program Files'), os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')}:
+         for name in ('FL64.exe', 'FL.exe'):
+@@ -995,18 +1004,17 @@
+ 
+ 
+ def _check_sample(s, dp, ndp, fl_dirs, flidx, audio, ex):
+-    """Whether one sample of a project can be found, looking where FL looks. Returns what the library keeps of it and the file."""
+-    nd = os.path.join(ndp, '')  # a drive root (d:\) already ends with the separator
++    nd = os.path.join(ndp, '')
+     found = None
+-    if not VAR_RE.match(s) and not os.path.isabs(s):
+-        s = os.path.normpath(os.path.join(dp, s))  # relative to the project folder
++    if not VAR_RE.match(s) and not os.path.isabs(s) and not (MAC and pathlib.PureWindowsPath(s).is_absolute()):
++        s = os.path.normpath(os.path.join(dp, s))
+     for c in resolve(s, dp, fl_dirs):
+         if ex.file(c):
+             found = c; break
+     moved = None; cands = ()
+     if not found:
+-        # FL also looks for a missing file by name: first in the project folder and its subfolders, then in its
+-        # Browser extra search folders (tested with FL 26). It takes the first file with that name, right or wrong
++
++
+         name = _base(s); ln = name.lower()
+         here = [os.path.join(d, name) for d in audio.get(ln, ()) if d == ndp or d.startswith(nd)]
+         cands = here + flidx.get(ln, [])
+@@ -1021,11 +1029,11 @@
+     local = bool(found) and os.path.normcase(os.path.abspath(found)).startswith(nd)
+     one = dict(p=s, e=bool(found), s=size, l=local)
+     if moved:
+-        one['r'] = moved  # where it really is: FL finds it by itself
++        one['r'] = moved
+         if not local:
+-            one['x'] = 1  # in one of FL's extra search folders
++            one['x'] = 1
+         if len(cands) > 1:
+-            # more files with this name and different sizes (not just copies of one kit): FL may take another one
++
+             sizes = set()
+             for c in cands:
+                 try:
+@@ -1426,6 +1434,8 @@
+ 
+ 
+ def fl_running():
++    if MAC:
++        return mac_support.fl_running()
+     try:
+         r = subprocess.run(['tasklist', '/NH', '/FO', 'CSV'], capture_output=True, timeout=10, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+     except Exception as e:
+@@ -1453,8 +1463,8 @@
+ 
+ 
+ def link_folder(d):
+-    """Adds the folder to FL's Browser extra search folders, as one more value in the first free place. Only this value is
+-    written: the rest of FL's settings stay as they are. FL must be closed: it reads this list when it starts."""
++    if MAC:
++        raise OSError(mac_support.REVIVER_HELP)
+     import winreg
+     versions = _fl_versions()
+     if not versions:
+@@ -1473,6 +1483,8 @@
+ 
+ 
+ def unlink_folder(d):
++    if MAC:
++        raise OSError(mac_support.REVIVER_HELP)
+     import winreg
+     versions = _fl_versions()
+     if not versions:
+@@ -1779,7 +1791,7 @@
+ 
+ # ------------------------------------------------------------------ app state
+ def data_dir():
+-    base = os.environ.get('APPDATA') or os.path.join(os.path.expanduser('~'), '.config')
++    base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support') if MAC else os.environ.get('APPDATA') or os.path.join(os.path.expanduser('~'), '.config')
+     d = os.path.join(base, APP)
+     os.makedirs(d, exist_ok=True)
+     return d
+@@ -1793,7 +1805,8 @@
+ 
+ 
+ def _drives():
+-    """Letters of the drives connected now (Windows). Used to say "drive G: not connected" instead of "missing"."""
++    if MAC:
++        return mac_support.drives()
+     try:
+         import ctypes
+         m = ctypes.windll.kernel32.GetLogicalDrives()
+@@ -2260,11 +2273,14 @@
+                     self._assistant_requests.pop(request_id, None)
+ 
+     def window_maximized(self):
++        if MAC:
++            return mac_support.on_main(lambda: bool(self._window.native.isZoomed()))
+         from System.Windows.Forms import FormWindowState
+         return self._window.native.WindowState == FormWindowState.Maximized
+ 
+     def _install_window_frame(self):
+-        """Keep Windows' animated taskbar transitions while the web UI draws the title bar."""
++        if MAC:
++            return
+         import ctypes
+         from ctypes import wintypes
+ 
+@@ -2280,30 +2296,38 @@
+ 
+         @proc_type
+         def frame_proc(handle, msg, wparam, lparam, subclass_id, data):
+-            if msg == 0x0083 and wparam:  # WM_NCCALCSIZE: use the title bar space for the web UI
++            if msg == 0x0083 and wparam:
+                 if user32.IsZoomed(wintypes.HWND(handle)):
+                     rect = wintypes.RECT.from_address(lparam)
+                     top, bottom = rect.top, rect.bottom
+                     controls.DefSubclassProc(handle, msg, wparam, lparam)
+-                    # Keep the invisible maximized border outside the monitor work area.
++
+                     rect.top = top + (bottom - rect.bottom)
+                 return 0
+-            if msg == 0x0082:  # WM_NCDESTROY
++            if msg == 0x0082:
+                 controls.RemoveWindowSubclass(handle, frame_proc, subclass_id)
+             return controls.DefSubclassProc(handle, msg, wparam, lparam)
+ 
+-        self._frame_proc = frame_proc  # keep the callback alive for the lifetime of the HWND
++        self._frame_proc = frame_proc
+         self._frame_hwnd = hwnd
+         if not controls.SetWindowSubclass(hwnd, frame_proc, 1, 0):
+             raise OSError('Cannot install custom window frame')
+-        user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0037)  # SWP_FRAMECHANGED, preserve geometry and focus
++        user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0037)
+ 
+     def window_command(self, action):
++        if MAC:
++            if action == 'close':
++                self._window.destroy()
++            elif action == 'minimize':
++                self._window.minimize()
++            elif action == 'maximize' and not self._full:
++                mac_support.on_main(lambda: self._window.native.zoom_(None))
++            return
+         if action == 'close':
+             self._window.destroy()
+         elif action == 'minimize':
+             import ctypes
+-            ctypes.windll.user32.PostMessageW(self._frame_hwnd, 0x0112, 0xF020, 0)  # WM_SYSCOMMAND, SC_MINIMIZE
++            ctypes.windll.user32.PostMessageW(self._frame_hwnd, 0x0112, 0xF020, 0)
+         elif action == 'maximize' and not self._full:
+             if self.window_maximized():
+                 self._window.restore()
+@@ -2311,7 +2335,8 @@
+                 self._window.maximize()
+ 
+     def window_drag(self, edge):
+-        """Let Windows track the mouse while moving or sizing the frameless window."""
++        if MAC:
++            return
+         import ctypes
+         from System import Action
+         edges = ('left', 'right', 'top', 'top-left', 'top-right', 'bottom', 'bottom-left', 'bottom-right')
+@@ -2504,14 +2529,14 @@
+         return dict(ok=True, state=self._store.public())
+ 
+     def show_kit(self, path):
+-        # opens in Explorer a folder inside the user's kit folders. A kit folder can be a whole drive: its root comes as "F:"
++
+         path = str(path)
+         path = os.path.normpath(path + os.sep if re.match(r'^[A-Za-z]:$', path) else path); key = os.path.normcase(path)
+         if not any(key == os.path.normcase(k) or _inside(path, k) for k in self._store.state['kitpaths']):
+             return dict(ok=False, error='Cartella non presente tra le cartelle dei kit')
+         if not os.path.isdir(path):
+             return dict(ok=False, error='Cartella non trovata: ' + path)
+-        os.startfile(path)
++        mac_support.open_path(path) if MAC else os.startfile(path)
+         return dict(ok=True)
+ 
+     def remove_path(self, path):
+@@ -2669,7 +2694,7 @@
+         return self._rv_relinked(path)
+ 
+     def open_reviver_dir(self):
+-        os.startfile(reviver_dir())
++        mac_support.open_path(reviver_dir()) if MAC else os.startfile(reviver_dir())
+         return dict(ok=True)
+ 
+     def choose_sources(self, kind):
+@@ -2764,8 +2789,6 @@
+         return self._rv_after(row, changed=True)
+ 
+     def start_drag(self, path=None, i=None):
+-        """Starts dragging a file towards FL, like from Explorer, while the mouse button is down in the page. A file inside a zip
+-        is first extracted into the Reviver folder, so FL gets a real file that stays there."""
+         import ctypes
+         if i is not None:
+             if not 0 <= int(i) < len(self._rv_sources):
+@@ -2778,13 +2801,15 @@
+         path = os.path.normpath(str(path))
+         if not path.lower().endswith(AUDIO) or not os.path.isfile(path) or not self._file_ok(path):
+             return dict(ok=False, error='File non trovato: ' + path)
++        if MAC:
++            return mac_support.start_drag(self._window, path)
+         from System import Action, Array, String
+         from System.Windows.Forms import DataObject, DataFormats, DragDropEffects
+         form = self._window.native
+ 
+         def go():
+             try:
+-                ctypes.windll.user32.ReleaseCapture()  # the page holds the mouse: without this the drag doesn't start
++                ctypes.windll.user32.ReleaseCapture()
+                 form.DoDragDrop(DataObject(DataFormats.FileDrop, Array[String]([path])), DragDropEffects.Copy)
+             except Exception as x:
+                 log.warning('drag not started: %s', x)
+@@ -2898,7 +2923,7 @@
+         return dict(ok=True)
+ 
+     def open_data_dir(self):
+-        os.startfile(os.path.dirname(self._store.file))
++        mac_support.open_path(os.path.dirname(self._store.file)) if MAC else os.startfile(os.path.dirname(self._store.file))
+         return dict(ok=True)
+ 
+     # Search online: opens the browser with the search filled in, only on the listed sites. The app downloads nothing
+@@ -2969,7 +2994,7 @@
+         path = os.path.normpath(str(path))
+         if not (self._file_ok(path) or self._is_backup(path)) or not os.path.isfile(_lp(path)):
+             return dict(ok=False, error='File non trovato: ' + path)
+-        subprocess.Popen(['explorer', '/select,' + path])
++        mac_support.reveal(path) if MAC else subprocess.Popen(['explorer', '/select,' + path])
+         return dict(ok=True)
+ 
+     def audio_url(self, path):
+@@ -2989,7 +3014,7 @@
+         folder = os.path.normpath(row['dir'])
+         if not os.path.isdir(_lp(folder)):
+             return dict(ok=False, error='Cartella non trovata: ' + folder)
+-        os.startfile(_lp(folder))
++        mac_support.open_path(folder) if MAC else os.startfile(_lp(folder))
+         return dict(ok=True)
+ 
+     def open_project(self, path):
+@@ -2999,14 +3024,14 @@
+         if not os.path.isfile(path):
+             return dict(ok=False, error='File non trovato: ' + path)
+         try:
+-            os.startfile(path)  # the program Windows uses for .flp files (FL Studio)
++            mac_support.open_path(path) if MAC else os.startfile(path)
+         except OSError:
+             if path.lower().endswith('.als'):
+-                return dict(ok=False, error='Associa i file .als ad Ableton Live in Windows')
++                return dict(ok=False, error='Associa i file .als ad Ableton Live in macOS')
+             exe = _fl_exe()
+             if not exe:
+-                return dict(ok=False, error='Windows non sa con cosa aprire i .flp e FL Studio non è nella cartella solita')
+-            subprocess.Popen([exe, path])
++                return dict(ok=False, error='Il Mac non sa con cosa aprire i .flp e FL Studio non è in Applicazioni')
++            subprocess.Popen(['open', '-a', exe, path] if MAC else [exe, path])
+         return dict(ok=True)
+ 
+ 
+@@ -3131,7 +3156,8 @@
+ 
+ 
+ def has_webview2():
+-    """Without WebView2 pywebview cannot use Edge and the UI doesn't work. Registry keys as in Microsoft's documentation."""
++    if MAC:
++        return True
+     try:
+         import winreg
+     except ImportError:
+@@ -3345,6 +3371,9 @@
+ 
+ 
+ def main():
++    if MAC and len(sys.argv) == 3 and sys.argv[1] == '--mac-build-check':
++        mac_support.build_check(sys.modules[__name__], sys.argv[2])
++        return
+     if len(sys.argv) == 3 and sys.argv[1] == '--dump':
+         out = dict(paths=[sys.argv[2]], scanned={}, containers=[], projects=scan_root(sys.argv[2]), home=os.path.expanduser('~'))
+         sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+@@ -3364,7 +3393,7 @@
+         return
+     import webview
+     base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+-    threading.Thread(target=AudioServer.get, daemon=True).start()  # ready before the first ▶
++    threading.Thread(target=AudioServer.get, daemon=True).start()
+     api = Api()
+     log.info('start: %s (exe: %s), pywebview %s', base, getattr(sys, 'frozen', False), getattr(webview, '__version__', '?'))
+     api._window = webview.create_window('Project Seeker', os.path.join(base, 'ui', 'index.html'), js_api=api,
+--- a/assistant_local.py
++++ b/assistant_local.py
+@@ -1,9 +1,13 @@
+ # Copyright (C) 2026 Gato
+ # SPDX-License-Identifier: GPL-3.0-only
+ # Licensed under the GNU General Public License v3.0; see LICENSE.
+-"""User-selected OpenAI-compatible chat endpoint. Secrets stay in Windows DPAPI."""
+ import ctypes
++import sys
+ from ctypes import wintypes
++
++MAC = sys.platform == 'darwin'
++if MAC:
++    import mac_support
+ import json
+ import http.client
+ import io
+@@ -157,7 +161,7 @@
+         return dict(url=url, model=str(c.get('model') or '')[:120], local=local,
+                     share=c.get('share') is True if not local else True,
+                     reasoning=c.get('reasoning') if c.get('reasoning') in ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max') else '',
+-                    has_key=os.path.isfile(os.path.join(folder, 'assistant.key')))
++                    has_key=mac_support.has_key(folder) if MAC else os.path.isfile(os.path.join(folder, 'assistant.key')))
+     except (OSError, ValueError, TypeError, json.JSONDecodeError):
+         return dict(url='', model='', local=True, share=False, has_key=False)
+ 
+@@ -175,7 +179,12 @@
+     if len(key) > 4096 or '\n' in key or '\r' in key:
+         raise ValueError('Chiave API non valida')
+     secret = os.path.join(folder, 'assistant.key')
+-    if config.get('clear_key') or (previous['url'] and previous['url'] != url and not key):
++    if MAC:
++        if config.get('clear_key') or (previous['url'] and previous['url'] != url and not key):
++            mac_support.save_key(folder, '')
++        elif key:
++            mac_support.save_key(folder, key)
++    elif config.get('clear_key') or (previous['url'] and previous['url'] != url and not key):
+         if os.path.exists(secret):
+             os.remove(secret)
+     elif key:
+@@ -307,7 +316,9 @@
+     messages.append({'role': 'user', 'content': message})
+     keyfile = os.path.join(folder, 'assistant.key')
+     key = ''
+-    if os.path.isfile(keyfile):
++    if MAC:
++        key = mac_support.read_key(folder)
++    elif os.path.isfile(keyfile):
+         with open(keyfile, 'rb') as f:
+             key = _crypt(f.read(), True).decode()
+     base = c['url'] if c['url'].endswith('/v1') else c['url'] + '/v1'
+--- a/ui/index.html
++++ b/ui/index.html
+@@ -973,6 +973,9 @@
+ 'use strict';
+ document.getElementById('nowv').remove(); // if this script never runs (old engine), the message stays
+ const $ = (s, r) => (r || document).querySelector(s);
++const IS_MAC = /Mac/i.test(navigator.platform || navigator.userAgent || ''), SEP = IS_MAC ? '/' : '\\';
++const driveOf = p => { const m = IS_MAC ? /^\/Volumes\/([^/]+)(?:\/|$)/i.exec(p) : /^([a-z]):/i.exec(p); return m ? IS_MAC ? m[1] : m[1].toUpperCase() + ':' : ''; };
++const driveOff = (p, drives) => { const d = driveOf(p); return !!(d && drives && !drives.has(d.replace(/:$/, '').toUpperCase())); };
+ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+ const fmtTime = (h) => { if (h == null) return '–'; const m = Math.round(h * 60); return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm'; };
+ const fmtDate = (s) => {
+@@ -1047,6 +1050,7 @@
+ }
+ function initWindowControls() {
+   const bridge = api();
++  if (IS_MAC) return;
+   if (!bridge.window_command) return;
+   const controls = $('.window-controls');
+   controls.hidden = false;
+@@ -1092,7 +1096,7 @@
+   $('#askNo').textContent = T('Annulla'); $('#askYes').textContent = T('Togli'); $('#mp').setAttribute('aria-label', T('Lettore'));
+ }
+ // messages from Python (written in Italian in app.py) are translated here; the path that follows stays as is
+-const PY_MSG = ['Associa i file .als ad Ableton Live in Windows', 'Immagine troppo grande (massimo 20 MB)', 'Cartella non presente tra le cartelle dei kit', 'Cartella non trovata', 'Ricerca non valida', 'Progetto non presente nella libreria', 'File non trovato', 'Windows non sa con cosa aprire i .flp e FL Studio non è nella cartella solita', 'non è un file FLP', 'file vuoto', 'file rovinato, nessun dato leggibile', 'file troppo grande per essere un progetto', 'lettura fermata perché troppo lunga', 'lettura interrotta da un errore', 'file bloccato o senza permesso di lettura', 'file non trovato', 'solo nel cloud, non scaricato', 'errore durante la lettura', 'Prova: elenco cartelle bloccato', 'Prova: modifiche disattivate', 'Operazione non riuscita', 'FL Studio non trovato', 'Le cartelle extra di FL Studio sono piene', 'File non copiato', 'Troppi file con lo stesso nome'];
++const PY_MSG = ['Associa i file .als ad Ableton Live in macOS', 'Immagine troppo grande (massimo 20 MB)', 'Cartella non presente tra le cartelle dei kit', 'Cartella non trovata', 'Ricerca non valida', 'Progetto non presente nella libreria', 'File non trovato', 'Il Mac non sa con cosa aprire i .flp e FL Studio non è in Applicazioni', 'non è un file FLP', 'file vuoto', 'file rovinato, nessun dato leggibile', 'file troppo grande per essere un progetto', 'lettura fermata perché troppo lunga', 'lettura interrotta da un errore', 'file bloccato o senza permesso di lettura', 'file non trovato', 'solo nel cloud, non scaricato', 'errore durante la lettura', 'Prova: elenco cartelle bloccato', 'Prova: modifiche disattivate', 'Operazione non riuscita', 'FL Studio non trovato', 'Le cartelle extra di FL Studio sono piene', 'File non copiato', 'Troppi file con lo stesso nome'];
+ function trErr(m) {
+   if (LANG === 'it' || !m) return m;
+   const text = String(m), translated = T(text);
+@@ -1191,14 +1195,14 @@
+   const l = path.toLowerCase(), h = (home || '').toLowerCase();
+   if (l.startsWith('%flstudiodownloadsdata%')) return 'FL Cloud';
+   if (l.startsWith('%')) return T('Cartelle di FL Studio');
+-  const m = /^([a-z]):/i.exec(path);
+-  // drive not connected now (external disk, USB stick): it needs plugging in, not searching online
+-  if (m && drives && drives.size && !drives.has(m[1].toUpperCase())) return T('Disco {d} non collegato', { d: m[1].toUpperCase() + ':' });
+-  const um = /^[a-z]:\\users\\([^\\]+)\\/i.exec(path);
+-  if (um && h && !l.startsWith(h + '\\')) return T('Altro utente ({u})', { u: um[1] });
+-  if (/\\downloads\\/i.test(path)) return T('Downloads');
+-  if (/\\desktop\\/i.test(path)) return T('Desktop');
+-  if (m && m[1].toLowerCase() !== (h[0] || 'c')) return T('Disco {d}', { d: m[1].toUpperCase() + ':' });
++  const m = /^([a-z]):/i.exec(path), dv = driveOf(path);
++  if (driveOff(path, drives)) return T('Disco {d} non collegato', { d: dv });
++  if (IS_MAC && m) return T('Percorso di Windows');
++  const um = /^(?:[a-z]:)?[\\/]users[\\/]([^\\/]+)[\\/]/i.exec(path);
++  if (um && h && !l.startsWith(h + SEP)) return T('Altro utente ({u})', { u: um[1] });
++  if (/[\\/]downloads[\\/]/i.test(path)) return T('Downloads');
++  if (/[\\/]desktop[\\/]/i.test(path)) return T('Desktop');
++  if (IS_MAC ? dv : m && m[1].toLowerCase() !== (h[0] || 'c')) return T('Disco {d}', { d: dv });
+   return T('Altro');
+ }
+ 
+@@ -1226,6 +1230,7 @@
+ const dotsBtn = (p) => '<span class="rdots" role="button" data-pmenu="' + p.id + '" title="' + T('Opzioni') + '" aria-label="' + T('Opzioni per {x}', { x: esc(p.dn) }) + '">' + DOTS_SVG + '</span>';
+ // a missing file on a drive that isn't connected, or in the folders of another Windows user
+ function isOtherPc(path, home, drives) {
++  if (IS_MAC) return /^[a-z]:/i.test(path) || driveOff(path, drives) || /^\/Users\/[^/]+\//i.test(path) && !!home && !path.toLowerCase().startsWith(home.toLowerCase() + '/');
+   const m = /^([a-z]):/i.exec(path); if (!m) return false;
+   if (drives && drives.size && !drives.has(m[1].toUpperCase())) return true;
+   return /^[a-z]:\\users\\[^\\]+\\/i.test(path) && !!home && !path.toLowerCase().startsWith(home.toLowerCase() + '\\');
+@@ -1271,8 +1276,8 @@
+   (data.kitpaths || []).forEach((root) => {
+     const lib = (data.kitlib || {})[root]; if (!lib) return;
+     const r = root.replace(/[\\/]+$/, ''), mode = (data.kitmode || {})[root] || (lib.one ? 'one' : 'split'), rootName = baseName(r) || r;
+-    if (mode === 'one') LIB.push({ root, name: rootName, dir: r, files: [].concat(...lib.parts.map((pt) => pt.files.map((x) => [pt.sub ? pt.sub + '\\' + x[0] : x[0], x[1]]))) });
+-    else lib.parts.forEach((pt) => { if (pt.files.length) LIB.push({ root, name: cleanKit(pt.sub || rootName), dir: pt.sub ? r + '\\' + pt.sub : r, files: pt.files }); });
++    if (mode === 'one') LIB.push({ root, name: rootName, dir: r, files: [].concat(...lib.parts.map((pt) => pt.files.map((x) => [pt.sub ? pt.sub + SEP + x[0] : x[0], x[1]]))) });
++    else lib.parts.forEach((pt) => { if (pt.files.length) LIB.push({ root, name: cleanKit(pt.sub || rootName), dir: pt.sub ? r + SEP + pt.sub : r, files: pt.files }); });
+   });
+   const byFile = new Map();
+   LIB.forEach((lk) => {
+@@ -1577,7 +1582,7 @@
+ });
+ const ACCENTS = [['Menta', '#62D6B3', '#178A6B'], ['Azzurro', '#7FB2F0', '#2F6FC0'], ['Arancione', '#F5925A', '#B8571E'], ['Rosa', '#F08AB8', '#C04A80'], ['Lime', '#B6D964', '#5E8A1C'], ['Turchese', '#4CC9E0', '#0B7F93'], ['Indaco', '#9DA3F7', '#4A50C8'], ['Sabbia', '#D8C29C', '#7E6A45'], ['Grigio', '#C3D1CE', '#52625F']];
+ const FONT_SIZES = [['Piccolo', 0.9], ['Normale', 1], ['Grande', 1.12]];
+-const THEMES = [['black', 'Black'], ['dark', 'Scuro'], ['light', 'Chiaro'], ['system', 'Come Windows']];
++const THEMES = [['black', 'Black'], ['dark', 'Scuro'], ['light', 'Chiaro'], ['system', 'Come macOS']];
+ const C = { bg: '#152023', acc: '#62D6B3', warn: '#F0B45A', red: '#F06A6A', muted: '#A3B8B5', tree: '#3B5158', casing: '#0A1213', ring: '#fff' };
+ const sysDark = matchMedia('(prefers-color-scheme: dark)');
+ const hex2 = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+@@ -2319,7 +2324,7 @@
+   const ex = (p.exports || []).filter((x) => PLAYABLE_RE.test(x[0])), stem = p.name.toLowerCase();
+   const bare = (f) => f.toLowerCase().replace(/\.[a-z0-9]+$/, '');
+   const e = ex.find((x) => bare(x[0]) === stem) || ex.find((x) => x[0].toLowerCase().includes(stem)) || (ex.length === 1 ? ex[0] : null);
+-  if (e) return { path: p.dir + '\\' + e[0], own: false };
++  if (e) return { path: p.dir + SEP + e[0], own: false };
+   const far = (p.exo || []).find((x) => PLAYABLE_RE.test(x[0]));
+   return far ? { path: far[0], own: false } : null;
+ }
+@@ -2481,7 +2486,7 @@
+ function isProjAudio(t) {
+   const p = projByPath(t.proj); if (!p) return null;
+   if (p.meta && p.meta.audio && samePath(p.meta.audio, t.path)) return p;
+-  return (p.exports || []).some((x) => samePath(p.dir + '\\' + x[0], t.path)) || (p.exo || []).some((x) => samePath(x[0], t.path)) ? p : null;
++  return (p.exports || []).some((x) => samePath(p.dir + SEP + x[0], t.path)) || (p.exo || []).some((x) => samePath(x[0], t.path)) ? p : null;
+ }
+ function heard(t) {
+   if (!t || player.paused) return;
+@@ -2871,7 +2876,7 @@
+   return '<div class="kdet">' + head + '<div><div class="kh">' + T('Sample') + ' <span>' + files.length + (nmiss ? ', ' + T('{n} mancanti', { n: nmiss }) : '') + (k.found ? ', ' + T('{n} ritrovati', { n: k.found }) : '') + '</span></div>' +
+     fs.map((f) => {
+       const n = new Set(f.proj).size, fd = !f.e && S.D.FOUND.get(f.p.toLowerCase());
+-      const where = fd ? fd[0].lk.dir + '\\' + fd[0].rel : '';
++      const where = fd ? fd[0].lk.dir + SEP + fd[0].rel : '';
+       return '<div class="kf' + (f.e || fd ? '' : ' miss') + '" title="' + esc(f.p) + (where ? '\n' + T('Trovato:') + ' ' + esc(where) : '') + '"><span>' + esc(baseName(f.p)) + '</span><small>' +
+         (f.e ? '' : fd ? '<b>' + T('trovato in {k}', { k: esc(fd[0].lk.name) }) + (fd.length > 1 ? ' ' + T('e altri {n}', { n: fd.length - 1 }) : '') + '</b> · ' : T('mancante') + ' · ') + Tn(n, '{n} progetto', '{n} progetti') + '</small></div>';
+     }).join('') + '</div>' +
+@@ -2927,7 +2932,7 @@
+ const isKitName = (n) => !GENERIC.has(n.toLowerCase()) && n.toLowerCase() !== 'sample' && (KIT_WORD.test(n) || KIT_JOINED.test(n) || DRUMKIT.test(n));
+ const kitQ = (n) => /kit|pack|(^|[^a-z])vol([^a-z]|$)|loops?|samples?|collection|bundle|suite/i.test(n) ? n : n + ' drum kit';
+ const webBtn = (site, q, label, pri) => '<button class="btn sm' + (pri ? ' pri' : '') + '" data-web="' + site + '" data-q="' + esc(q) + '" title="' + esc(T('Cerca "{q}" su {s}', { q, s: WEB[site][0] })) + '">' + (label || WEB[site][0]) + '</button>';
+-const offDrive = (p) => { const m = /^([a-z]):/i.exec(p), d = S.D.drives; return !!(m && d.size && !d.has(m[1].toUpperCase())); };
++const offDrive = (p) => driveOff(p, S.D.drives);
+ async function searchWeb(site, q) {
+   const a = api();
+   if (a && a.search_online) { try { const r = await a.search_online(site, q); if (r && r.ok === false) alertBar(r.error); } catch (e) { alertBar(T('Operazione non riuscita')); } }
+@@ -2974,7 +2979,7 @@
+ function sourceOf(s) {
+   const p = s.p, b = baseName(p), lo = p.toLowerCase(), fd = S.D.FOUND.get(lo);
+   if (fd) return { t: 'have', key: 'have:' + fd[0].lk.dir.toLowerCase(), name: fd[0].lk.name, dir: fd[0].lk.dir };
+-  if (offDrive(p)) { const d = p.slice(0, 1).toUpperCase() + ':'; return { t: 'drive', key: 'drive:' + d, name: T('Disco {d} non collegato', { d }) }; }
++  if (offDrive(p)) { const d = driveOf(p); return { t: 'drive', key: 'drive:' + d, name: T('Disco {d} non collegato', { d }) }; }
+   if (isRec(p) || /(^|\\)(image-line\\fl studio|%flstudiouserdata%)\\/i.test(lo) || /\\appdata\\/i.test(lo)) return { t: 'own', key: 'own', name: T('Registrazioni e bounce tuoi') };
+   const fo = pathDirs(p), fz = fo.find((x) => STEM_SITE.test(x));
+   if (fz) { const n = cleanTitle(fz.replace(/^\[?[a-z]+\.(com|ai)\]?\s*(stems\s*-\s*)?/i, '').replace(/\.(wav|mp3)$/i, '')); return { t: 'stem', key: 'stem:' + fz.toLowerCase(), name: /\s/.test(n) ? n : n.replace(/-+/g, ' ') }; }
+@@ -3109,7 +3114,7 @@
+ const rvSame = (a, b) => a.toLowerCase().replace(/\//g, '\\') === b.toLowerCase().replace(/\//g, '\\');
+ const rvCopy = (p, s) => (p._rvx.diary.copied || {})[baseName(s.p).toLowerCase()];
+ const rvOwnName = (p, s) => (p._rvx.diary.own || {})[baseName(s.p).toLowerCase()];
+-const rvInFolder = (p, path) => { const d = (p._rvx.folder || {}).dir; return !!d && path.toLowerCase().startsWith(d.toLowerCase() + '\\'); };
++const rvInFolder = (p, path) => { const d = (p._rvx.folder || {}).dir; return !!d && path.toLowerCase().startsWith(d.toLowerCase() + SEP); };
+ const rvIsVst = (p, pl) => pl === 'VST non identificato' || p._rvx.vp[pl] != null;
+ const rvGone = (p, pl) => pl === 'VST non identificato' || (p.vm || []).includes(pl);
+ function rvAuto(p, n) {
+@@ -3224,7 +3229,7 @@
+   return src.t === 'file' && !src.lost ? webBtn('google', src.name) + webBtn('youtube', src.name) : '';
+ }
+ function rvSoundPanel(p, N, n) {
+-  const s = n.s, was = (path) => { const d = pathDirs(path).slice(-2); return d.length ? '…\\' + d.join('\\') : path; }, rt = recTime(s.p);
++  const s = n.s, was = (path) => { const d = pathDirs(path).slice(-2); return d.length ? '…' + SEP + d.join(SEP) : path; }, rt = recTime(s.p);
+   let info = '';
+   if (!s.e) {
+     const src = rvSrc(s), others = N.filter((x) => x !== n && x.kind === 's' && !x.s.e && !rvDone(x) && rvSrc(x.s).key === src.key).length;
+@@ -3236,7 +3241,7 @@
+       (acts ? '<div class="rvrow">' + acts + '</div>' : '');
+   } else if (s.r) {
+     const d = s.r.split(/[\\/]+/), doubt = flDoubt(s); d.pop();
+-    info = '<p class="rvinfo">' + esc(T('FL lo prende da {x}', { x: '…\\' + d.slice(-2).join('\\') })) + '</p>' + (doubt ? '<p class="rvwarn">' + (doubt === 'many' ? T('ci sono {n} file con questo nome', { n: s.rn }) : T('viene da un\'altra cartella')) + ': ' + T('controlla in FL che sia quello giusto') + '</p>' : '');
++    info = '<p class="rvinfo">' + esc(T('FL lo prende da {x}', { x: '…' + SEP + d.slice(-2).join(SEP) })) + '</p>' + (doubt ? '<p class="rvwarn">' + (doubt === 'many' ? T('ci sono {n} file con questo nome', { n: s.rn }) : T('viene da un\'altra cartella')) + ': ' + T('controlla in FL che sia quello giusto') + '</p>' : '');
+   } else info = '<p class="rvinfo">' + (s.pl ? T('dentro {x}', { x: esc(s.pl) }) : /^%flstudio(factory)?data%/i.test(s.p) ? T('suono di FL Studio') : s.l ? T('nella cartella del progetto') : esc(was(s.p))) + '</p>';
+   const real = s.r || s.p, own = rvOwnName(p, s), copy = rvCopy(p, s), base = baseName(s.p).toLowerCase(), cands = ((S.rvCands || {})[p.path] || {})[base];
+   if (n.auto === 'ready') info = '<p class="rvinfo">' + T('Copiato nella cartella Reviver: FL lo vede quando riapri il progetto') + '</p>';
+@@ -3306,9 +3311,10 @@
+ const rvFlLabel = (N) => { const r = N.filter((n) => n.st === 'ready').length; return r ? T('Riapri in FL ({n})', { n: r }) : T('Apri in FL Studio'); };
+ function rvFilesHtml(p) {
+   const f = p._rvx.folder || {}, bench = (S.rvBench || {})[p.path];
++  if (IS_MAC && !f.linked) return '<div class="rvdrop off"><small>' + T('Su macOS aggiungi manualmente la cartella Reviver nelle impostazioni File di FL Studio, poi aggiorna il progetto.') + '</small><p class="path">' + esc(f.dir || '') + '</p><button class="btn sm" data-rfolder="open">' + T('Apri') + '</button></div>';
+   if (!f.linked) return '<div class="rvdrop off"><small>' + T('Aggiungi la cartella a FL per far trovare i suoni a FL Studio') + '</small><div class="rvrow"><button class="btn sm pri" data-rlink="1">' + T('Collega a FL') + '</button></div></div>';
+   return '<div class="rvdrop" id="rvdrop"><b>' + T('Trascina qui quello che hai scaricato') + '</b><small>' + T('Cartelle, zip o file: l\'app copia solo i suoni che mancano') + '</small><div class="rvrow"><button class="btn sm" data-rpick="folder">' + T('Scegli una cartella') + '</button><button class="btn sm" data-rpick="file">' + T('Scegli zip o file') + '</button></div></div>' +
+-    '<div class="rvfolder"><span>' + T('Cartella Reviver: {n} file, {s}', { n: f.files || 0, s: fmtSize(Math.round((f.size || 0) / 1024)) }) + '</span><button class="btn sm quiet" data-rfolder="open">' + T('Apri') + '</button><button class="btn sm quiet" data-rfolder="unlink">' + T('Scollega da FL') + '</button></div>' +
++    '<div class="rvfolder"><span>' + T('Cartella Reviver: {n} file, {s}', { n: f.files || 0, s: fmtSize(Math.round((f.size || 0) / 1024)) }) + '</span><button class="btn sm quiet" data-rfolder="open">' + T('Apri') + '</button><button class="btn sm quiet" data-rfolder="unlink" hidden>' + T('Scollega da FL') + '</button></div>' +
+     (bench && bench.n ? '<section class="rvbench"><button class="dtog' + (S.rvBenchOpen ? ' on' : '') + '" data-rbench="1" aria-expanded="' + !!S.rvBenchOpen + '">' + CHEV_SVG + '<h2>' + T('Gli altri file trascinati') + '</h2><small>' + bench.n + '</small></button>' +
+       (S.rvBenchOpen ? '<p class="rvinfo">' + T('Prendine uno e lascialo su un canale in FL') + '</p><div class="flist">' + bench.items.map((o) => '<div class="fi" title="' + esc(o.rel) + '">' + (o.path ? playBtn(o.path, p.id) : '') + '<span class="fn rvgrab" data-rdragi="' + o.i + '">' + esc(o.name) + '<small>' + esc(o.rel) + '</small></span></div>').join('') + '</div>' : '') + '</section>' : '');
+ }
+@@ -3606,7 +3612,7 @@
+   const live = (opts, on, key) => '<span class="seg">' + opts.map((o, i) => '<button data-' + key + '="' + o[0] + '" aria-pressed="' + (o[0] === on) + '" class="' + (o[0] === on ? 'on' : '') + '">' + T(o[1]) + '</button>').join('') + '</span>';
+   const start = startPage(S.prefs.start) || 'home', np = Object.keys(d.plays || {}).length;
+   const bodies = {
+-    general: sec(T('Lingua'), item('<span>' + T("Lingua dell'app") + '</span>', '<select class="sel" data-langsel="1" aria-label="' + esc(T("Lingua dell'app")) + '">' + [['system', 'Come Windows']].concat(LANGS).map((o) => '<option value="' + o[0] + '"' + (o[0] === (S.prefs.lang || 'system') ? ' selected' : '') + '>' + T(o[1]) + '</option>').join('') + '</select>')) +
++    general: sec(T('Lingua'), item('<span>' + T("Lingua dell'app") + '</span>', '<select class="sel" data-langsel="1" aria-label="' + esc(T("Lingua dell'app")) + '">' + [['system', 'Come macOS']].concat(LANGS).map((o) => '<option value="' + o[0] + '"' + (o[0] === (S.prefs.lang || 'system') ? ' selected' : '') + '>' + T(o[1]) + '</option>').join('') + '</select>')) +
+       sec(T('Avvio'), item('<span>' + T("Pagina all'avvio") + '</span>', '<select class="sel" data-pset="start" aria-label="' + esc(T("Pagina all'avvio")) + '">' + startPages().map((o) => '<option value="' + o[0] + '"' + (o[0] === start ? ' selected' : '') + '>' + T(o[1]) + '</option>').join('') + '</select>') +
+         item('<span>' + T("Scansiona all'avvio") + '</span><small>' + T('Rilegge le cartelle a ogni apertura (solo i progetti cambiati)') + '</small>', sw('autoscan', !!S.prefs.autoscan, "Scansiona all'avvio"))) +
+       sec(T('Tour dell’app'), item('<span>' + T('Rivedi le funzioni principali') + '</span>', '<button class="btn sm" data-tour-start="1">' + T('Rifai il tour') + '</button>')),
+@@ -3642,7 +3648,7 @@
+     '<label>' + T('Chiave API') + '<input id="as-key" type="password" autocomplete="off" placeholder="' + (c.has_key ? T('Chiave salvata: lascia vuoto per conservarla') : T('Facoltativa per un modello locale')) + '"></label>' +
+     '<label class="as-share"><input id="as-share" type="checkbox"' + (c.share && !c.local ? ' checked' : '') + '> ' + T('Consenti di inviare al provider esterno il riepilogo della libreria e i progetti pertinenti alle domande. I messaggi vengono sempre inviati al provider scelto.') + '</label>' +
+     '<small>' + T('Con il consenso, al provider vengono inviati messaggi e cronologia della chat, nomi e percorsi, BPM, plugin, tag, note, date e ore FL dei progetti pertinenti o selezionati, oltre ai riepiloghi richiesti. Nessun audio o sample viene inviato.') + '</small>' +
+-    '<small>' + T('Le chiavi vengono cifrate per il tuo account Windows. Gli indirizzi remoti richiedono HTTPS; HTTP funziona solo su questo PC.') + '</small>' +
++    '<small>' + T('Le chiavi vengono protette nel Portachiavi di macOS. Gli indirizzi remoti richiedono HTTPS; HTTP funziona solo su questo Mac.') + '</small>' +
+     '<div><button class="btn sm" data-as-save="1">' + T('Salva collegamento') + '</button> <button class="btn sm" data-as-clear="1"' + (c.has_key ? '' : ' disabled') + '>' + T('Rimuovi chiave') + '</button> ' + (c.url && c.model ? '<button class="btn sm" data-as-open="1">' + T('Apri la chat') + '</button>' : '') + '</div></div></section>';
+ }
+ function assistantProjectCard(ref) {
+@@ -3945,8 +3951,8 @@
+     ms.map(([s]) => { const fd = S.D.FOUND.get(s.p.toLowerCase()); return '<div class="fi miss" title="' + esc(s.p) + '"><span class="fn">' + esc(baseName(s.p)) + (s.pl ? ' <small>' + T('dentro {x}', { x: esc(s.pl) }) + '</small>' : '') + (fd ? '<small class="ok">' + T('trovato in {k}', { k: esc(fd[0].lk.name) }) + '</small>' : s.w ? '<small>' + esc(s.w) + '</small>' : '') + '</span>' + copyb(s.p, T('Copia il percorso')) + '</div>'; }),
+     ms.length > 1 ? '<button class="btn" data-copy="' + esc(ms.map((x) => x[0].p).join('\n')) + '" title="' + T('Copia tutti i percorsi') + '">' + T('Copia percorsi') + '</button>' : '') : '';
+   const au = mainAudio(p), isMain = (path) => !!au && samePath(au.path, path);
+-  const picked = m.audio && !p.exports.some((x) => samePath(p.dir + '\\' + x[0], m.audio)) ? [[m.audio, null, true]] : [];
+-  const exRows = picked.concat(p.exports.map((x) => [p.dir + '\\' + x[0], x[1], !!m.audio && samePath(p.dir + '\\' + x[0], m.audio), x[2]]), (p.exo || []).map((x) => [x[0], x[1], !!m.audio && samePath(x[0], m.audio), x[2], true])).sort((a, b) => isMain(b[0]) - isMain(a[0]) || (b[3] || 0) - (a[3] || 0));
++  const picked = m.audio && !p.exports.some((x) => samePath(p.dir + SEP + x[0], m.audio)) ? [[m.audio, null, true]] : [];
++  const exRows = picked.concat(p.exports.map((x) => [p.dir + SEP + x[0], x[1], !!m.audio && samePath(p.dir + SEP + x[0], m.audio), x[2]]), (p.exo || []).map((x) => [x[0], x[1], !!m.audio && samePath(x[0], m.audio), x[2], true])).sort((a, b) => isMain(b[0]) - isMain(a[0]) || (b[3] || 0) - (a[3] || 0));
+   const exBtn = '<button class="btn" data-pickaudio="' + p.id + '">' + T('Scegli file…') + '</button>';
+   const exHtml = exRows.length ? fold('exp', '<span>' + T('Export possibili') + ' (' + exRows.length + ')</span>', exRows.map(([path, size, own, score, far]) => '<div class="fi' + (isMain(path) ? ' main' : '') + '" title="' + esc(path) + '">' + play(path) + '<span class="fn">' + esc(baseName(path)) + '<small>' +
+       [size != null ? fmtSize(Math.max(1, Math.round(size / 1024))) : '', own ? T('scelto da te') : score != null ? T('possibile, {n}%', { n: score }) : '', far ? esc(baseName(path.replace(/[\\/][^\\/]*$/, ''))) : '', isMain(path) ? '<b>▶ ' + T('nell\'elenco') + '</b>' : ''].filter(Boolean).join(' · ') + '</small></span>' +
+@@ -3968,7 +3974,7 @@
+     '<input id="nameIn" placeholder="' + T('Nome tuo (al posto di {x})', { x: esc(p.name) }) + '" value="' + esc(m.name || '') + '" aria-label="' + T('Nome tuo') + '">' +
+     '<textarea id="noteIn" placeholder="' + T('Nota') + '" aria-label="' + T('Nota') + '">' + esc(m.note || '') + '</textarea></div>';
+   // the last two folders are enough to recognise it; the full path is in the tooltip and the copy button
+-  const segs = p.dir.split(/[\\/]+/).filter(Boolean), short = (segs.length > 2 ? '…\\' : '') + segs.slice(-2).join('\\');
++  const segs = p.dir.split(/[\\/]+/).filter(Boolean), short = (segs.length > 2 ? '…' + SEP : '') + segs.slice(-2).join(SEP);
+   el.innerHTML = '<div class="dart">' + coverHtml(p, true) + dotsBtn(p) + '</div><div class="dtop"><div style="min-width:0;flex:1"><div class="dname">' + esc(p.dn) + '</div>' + (m.name ? '<div class="muted" style="font-size:calc(13px*var(--fs))">' + esc(p.name) + '</div>' : '') + '<div class="dpath"><span title="' + esc(p.dir) + '">' + esc(short) + '</span>' + copyb(p.dir, T('Copia il percorso')) + '</div>' + (albumOf(p) ? '<button class="dalb" data-coll="albums:' + albumOf(p).id + '">' + T('Album') + ': <b>' + esc(albumOf(p).name) + '</b></button>' : '') + '</div>' +
+     '<button class="starb' + (m.star ? ' on' : '') + '" data-star="' + p.id + '" aria-pressed="' + !!m.star + '" aria-label="' + T('Preferito') + '" title="' + T('Preferito') + '">' + (m.star ? '★' : '☆') + '</button><button class="x" data-act="closesel" aria-label="' + T('Chiudi dettaglio') + '" title="' + T('Chiudi dettaglio') + '" style="width:36px;height:36px">' + XSVG(14) + '</button></div>' +
+     '<div class="dacts"><button class="btn" data-as-ask="' + esc(p.path) + '"' + (ASSIST.busy ? ' disabled' : '') + '>' + T('Chiedi all’assistente') + '</button><button class="btn pri" data-act="openfl"' + (p.error ? ' disabled' : '') + '>' + openLabel(p) + '</button><div><button class="btn sm" data-act="reveal" title="' + T('Mostra nella cartella') + '">' + I_DIR + T('Cartella') + '</button><button class="btn sm" data-act="onmap" title="' + T('Mostra sulla mappa') + '">' + I_MAP + T('Mappa') + '</button>' + (p.miss && !isLive(p) && rvOn() ? '<button class="btn sm" data-act="revive">' + T('Rianima') + '</button>' : '') + '</div></div>' +
+--- a/ui/lang/en.js
++++ b/ui/lang/en.js
+@@ -8,6 +8,14 @@
+ (function () {
+   const pl = (n, one, many) => (Number(n) === 1 ? one : many);
+   window.LANG_EN = {
++  "Come macOS": "Same as macOS",
++  "Percorso di Windows": "Windows path",
++  "Associa i file .als ad Ableton Live in macOS": "Associate .als files with Ableton Live in macOS",
++  "Il Mac non sa con cosa aprire i .flp e FL Studio non è in Applicazioni": "No app is associated with .flp files and FL Studio is not in Applications",
++  "Le chiavi vengono protette nel Portachiavi di macOS. Gli indirizzi remoti richiedono HTTPS; HTTP funziona solo su questo Mac.": "Keys are protected in macOS Keychain. Remote addresses require HTTPS; HTTP only works on this Mac.",
++  "Su macOS aggiungi manualmente la cartella Reviver nelle impostazioni File di FL Studio, poi aggiorna il progetto.": "On macOS, add the Reviver folder manually in FL Studio File settings, then refresh the project.",
++  "Impossibile accedere al Portachiavi di macOS": "Cannot access macOS Keychain",
++
+     "Generali": "General",
+     "Avvio": "Startup",
+     "Categorie delle impostazioni": "Settings categories",
+--- a/ui/lang/fr.js
++++ b/ui/lang/fr.js
+@@ -8,6 +8,14 @@
+ (function () {
+   const pl = (n, one, many) => (Number(n) <= 1 ? one : many); // French: 0 and 1 are singular
+   window.LANG_FR = {
++  "Come macOS": "Comme macOS",
++  "Percorso di Windows": "Chemin Windows",
++  "Associa i file .als ad Ableton Live in macOS": "Associez les fichiers .als à Ableton Live dans macOS",
++  "Il Mac non sa con cosa aprire i .flp e FL Studio non è in Applicazioni": "Aucune app associée aux fichiers .flp et FL Studio absent des Applications",
++  "Le chiavi vengono protette nel Portachiavi di macOS. Gli indirizzi remoti richiedono HTTPS; HTTP funziona solo su questo Mac.": "Les clés sont protégées dans le Trousseau macOS. Les adresses distantes nécessitent HTTPS ; HTTP fonctionne uniquement sur ce Mac.",
++  "Su macOS aggiungi manualmente la cartella Reviver nelle impostazioni File di FL Studio, poi aggiorna il progetto.": "Sur macOS, ajoutez manuellement le dossier Reviver dans les paramètres File de FL Studio, puis actualisez le projet.",
++  "Impossibile accedere al Portachiavi di macOS": "Impossible d’accéder au Trousseau macOS",
++
+     "Generali": "Général",
+     "Avvio": "Démarrage",
+     "Categorie delle impostazioni": "Catégories des paramètres",
+--- a/ui/lang/de.js
++++ b/ui/lang/de.js
+@@ -8,6 +8,14 @@
+ (function () {
+   const pl = (n, one, many) => (Number(n) === 1 ? one : many);
+   window.LANG_DE = {
++  "Come macOS": "Wie macOS",
++  "Percorso di Windows": "Windows-Pfad",
++  "Associa i file .als ad Ableton Live in macOS": "Verknüpfe .als-Dateien in macOS mit Ableton Live",
++  "Il Mac non sa con cosa aprire i .flp e FL Studio non è in Applicazioni": "Keine App für .flp-Dateien zugeordnet und FL Studio nicht im Programme-Ordner",
++  "Le chiavi vengono protette nel Portachiavi di macOS. Gli indirizzi remoti richiedono HTTPS; HTTP funziona solo su questo Mac.": "Schlüssel werden im macOS-Schlüsselbund geschützt. Externe Adressen benötigen HTTPS; HTTP funktioniert nur auf diesem Mac.",
++  "Su macOS aggiungi manualmente la cartella Reviver nelle impostazioni File di FL Studio, poi aggiorna il progetto.": "Füge unter macOS den Reviver-Ordner manuell in den File-Einstellungen von FL Studio hinzu und aktualisiere dann das Projekt.",
++  "Impossibile accedere al Portachiavi di macOS": "Zugriff auf den macOS-Schlüsselbund nicht möglich",
++
+     "Generali": "Allgemein",
+     "Avvio": "Start",
+     "Categorie delle impostazioni": "Einstellungskategorien",
+--- a/test_debug.py
++++ b/test_debug.py
+@@ -67,7 +67,7 @@
+             with patch.object(app.os, 'scandir', side_effect=denied):
+                 store.scan_kits(str(root))
+             lib = store.state['kitlib'][str(root)]
+-            self.assertEqual(sorted(lib['parts'][0]['files']), sorted([['Hidden\\kick.wav', 4], ['new.wav', 10]]))
++            self.assertEqual(sorted(lib['parts'][0]['files']), sorted([[str(Path('Hidden') / 'kick.wav'), 4], ['new.wav', 10]]))
+             self.assertEqual(lib['inaccessible'], [str(hidden)])
+             self.assertEqual(app.Store().state['kitlib'][str(root)], lib)
+             lost.unlink()
+@@ -121,7 +121,8 @@
+             api.set_meta(row['path'], {'name': 'Été', 'tags': ['café', 'café', '日本語'], 'note': 'àè 🎵'})
+             api.add_play(row['path'])
+             api.add_play(row['path'])
+-            api.save_albums({'albums': [{'id': 'test1', 'name': 'Été', 'tracks': [row['path'], row['path'].upper()]}, {'id': 'test2', 'name': 'Second', 'tracks': [row['path']]}], 'playlists': [{'id': 'list1', 'name': 'Mix', 'tracks': [row['path']]}]})
++            duplicate = row['path'].upper() if app.os.name == 'nt' else row['path']
++            api.save_albums({'albums': [{'id': 'test1', 'name': 'Été', 'tracks': [row['path'], duplicate]}, {'id': 'test2', 'name': 'Second', 'tracks': [row['path']]}], 'playlists': [{'id': 'list1', 'name': 'Mix', 'tracks': [row['path']]}]})
+             stored = app.Store()
+             key = app.os.path.normcase(row['path'])
+             self.assertEqual(stored.state['projects'], [row])
+--- a/test_assistant.py
++++ b/test_assistant.py
+@@ -111,7 +111,8 @@
+             library.summary(self.rows, kind='invalid')
+ 
+     def test_context_is_resolved_from_library_and_limited(self):
+-        data, cards = library.context(self.rows, self.plan(), self.raw[0]['path'].upper())
++        selected = self.raw[0]['path'].upper() if os.name == 'nt' else self.raw[0]['path']
++        data, cards = library.context(self.rows, self.plan(), selected)
+         self.assertEqual(json.loads(data)['selected_project']['note'], 'melodia scura')
+         data, _ = library.context(self.rows, self.plan(), 'C:\\invented.flp')
+         self.assertIsNone(json.loads(data)['selected_project'])
+@@ -410,4 +411,3 @@
+ 
+ if __name__ == '__main__':
+     unittest.main()
+-
+--- a/test_data_ui.js
++++ b/test_data_ui.js
+@@ -24,7 +24,7 @@
+ function ui() {
+   const context = vm.createContext({window: {}, console, navigator: {language: 'en'}, document: {}, S: {prefs: {}}});
+   for (const lang of ['en', 'fr', 'de']) context.window['LANG_' + lang.toUpperCase()] = dictionaries[lang];
+-  vm.runInContext(extract('const esc =', 'const S =') + '\n' + extract('const LANGS =', '/* ---------------------------------------------------------------- bridge') + '\n' + extract('const GENERIC =', 'const whyOf =') + '\n' + extract('const ST_ORDER =', '// group of a project') + '\n' + extract('const COLS =', 'const applyFilter ='), context);
++  vm.runInContext(extract('const IS_MAC =', 'const S =') + '\n' + extract('const LANGS =', '/* ---------------------------------------------------------------- bridge') + '\n' + extract('const GENERIC =', 'const whyOf =') + '\n' + extract('const ST_ORDER =', '// group of a project') + '\n' + extract('const COLS =', 'const applyFilter ='), context);
+   return code => vm.runInContext(code, context);
+ }
+ const project = (name, extra = {}) => ({path: 'C:\\beats\\' + name + '.flp', dir: 'C:\\beats', root: 'C:\\beats', folder: 'beats', name, version: '', created: '', modified: '', hours: null, bpm: null, kb: 1, backups: 0, samples: [], native: [], vst: [], ...extra});
