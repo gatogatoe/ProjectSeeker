@@ -8,7 +8,10 @@ original files. Available in English, Italian, French and German.
 
 - Windows 10/11, 64-bit: run `ProjectSeeker-setup-0.9.exe`. Microsoft Edge WebView2 Runtime is required. The installer works without administrator rights.
 
-macOS packages are still being prepared and are not included in this distribution.
+- Apple Silicon: use `mac/ProjectSeeker-0.9-mac-arm64.dmg`.
+- Intel Mac: use `mac/ProjectSeeker-0.9-mac-x86_64.dmg`.
+
+These published Mac 0.9 builds retain their MIT license. The current Windows release and source archive use GPL-3.0-only. Open the DMG and drag the app to Applications.
 
 
 **Windows SmartScreen:** You may see "Windows protected your PC" because the installer is not digitally signed. This warning alone does not mean malware was detected. If you downloaded it from this project's official download page and verified its SHA-256 below, select **More info > Run anyway** to continue, if that option is available.
